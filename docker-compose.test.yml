@@ -1,0 +1,27 @@
+# Environnement de test local, avant toute mise en production (CCP2).
+version: "3.9"
+services:
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: techcorp
+      POSTGRES_PASSWORD: techcorp
+      POSTGRES_DB: techcorp_orders
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techcorp"]
+      interval: 5s
+      retries: 5
+
+  app-test:
+    build: ./app
+    environment:
+      DB_HOST: db-test
+      DB_PORT: 5432
+      DB_NAME: techcorp_orders
+      DB_USER: techcorp
+      DB_PASSWORD: techcorp
+    ports: ["8001:8000"]
+    depends_on:
+      db-test:
+        condition: service_healthy

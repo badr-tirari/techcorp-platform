@@ -1,0 +1,77 @@
+# Compétence CCP3 : "Définir des indicateurs de performance et de disponibilité"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["alertmanager.monitoring.svc.cluster.local:9093"]
+
+    rule_files:
+      - /etc/prometheus/rules/alert-rules.yml
+
+    scrape_configs:
+      - job_name: "order-tracker"
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["order-tracker.techcorp-orders.svc.cluster.local:8000"]
+
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+
+  alert-rules.yml: |
+    groups:
+      - name: techcorp-order-tracker-sla
+        rules:
+          # Seuil SLA 1 : disponibilité — le endpoint /health doit répondre
+          - alert: ServiceDown
+            expr: up{job="order-tracker"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "TechCorp Order Tracker est injoignable"
+              description: "La cible Prometheus order-tracker est down depuis plus d'1 minute."
+
+          # Seuil SLA 2 : taux d'erreur HTTP (5xx) > 5% sur 5 minutes
+          - alert: HighErrorRate
+            expr: |
+              (sum(rate(http_requests_total{status=~"5.."}[5m]))
+                /
+               sum(rate(http_requests_total[5m]))) > 0.05
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Taux d'erreur HTTP élevé sur order-tracker"
+              description: "Plus de 5% des requêtes échouent (5xx) sur les 5 dernières minutes."
+
+          # Seuil SLA 3 : latence moyenne > 300ms sur 5 minutes
+          - alert: HighLatency
+            expr: |
+              histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.3
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Latence anormalement élevée sur order-tracker"
+              description: "Le 95e percentile de latence dépasse 300ms depuis plus de 2 minutes."
+
+          # Seuil SLA 4 : base de données injoignable
+          - alert: DatabaseUnreachable
+            expr: increase(db_health_check_total{result="fail"}[5m]) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Base de données PostgreSQL injoignable depuis l'application"
+              description: "Au moins un échec de connexion à la base a été détecté sur les 5 dernières minutes."

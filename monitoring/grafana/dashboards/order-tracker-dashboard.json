@@ -1,0 +1,44 @@
+{
+  "title": "TechCorp Order Tracker — Supervision (CCP3)",
+  "uid": "techcorp-order-tracker",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "title": "Disponibilité du service (up)",
+      "type": "stat", "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"order-tracker\"}", "legendFormat": "up" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "red", "value": 0 }, { "color": "green", "value": 1 }
+      ] } } }
+    },
+    {
+      "id": 2, "title": "Taux de requêtes par seconde",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(rate(http_requests_total[1m])) by (endpoint)", "legendFormat": "{{endpoint}}" }]
+    },
+    {
+      "id": 3, "title": "Taux d'erreur HTTP (5xx)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [{ "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))", "legendFormat": "taux d'erreur" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    {
+      "id": 4, "title": "Latence P95 (secondes)",
+      "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }]
+    },
+    {
+      "id": 5, "title": "Échecs de connexion base de données (cumulés)",
+      "type": "stat", "gridPos": { "h": 6, "w": 6, "x": 6, "y": 16 },
+      "targets": [{ "expr": "sum(db_health_check_total{result=\"fail\"})", "legendFormat": "échecs DB" }]
+    },
+    {
+      "id": 6, "title": "Alertes actives",
+      "type": "table", "gridPos": { "h": 6, "w": 12, "x": 0, "y": 22 },
+      "targets": [{ "expr": "ALERTS{alertstate=\"firing\"}", "format": "table", "instant": true }]
+    }
+  ]
+}

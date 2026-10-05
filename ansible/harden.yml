@@ -1,0 +1,112 @@
+---
+# harden.yml
+# -----------
+# Durcissement de la sécurité du serveur, en s'appuyant sur les recommandations
+# de configuration d'un système GNU/Linux de l'ANSSI.
+# Compétence CCP1 : "Sécuriser l'infrastructure"
+
+- name: Durcissement sécurité du serveur (recommandations ANSSI)
+  hosts: server
+  become: true
+  vars:
+    ssh_port: 22
+
+  tasks:
+    - name: Mettre à jour le cache des paquets
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Mettre à jour tous les paquets installés
+      apt:
+        upgrade: dist
+
+    - name: Installer les paquets de sécurité (ufw, fail2ban, unattended-upgrades)
+      apt:
+        name:
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+        state: present
+
+    # --- Authentification SSH sécurisée ---
+    - name: Désactiver la connexion SSH en tant que root
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify: Redémarrer SSH
+
+    - name: Désactiver l'authentification par mot de passe (clé SSH uniquement)
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+      notify: Redémarrer SSH
+
+    - name: Limiter le nombre de tentatives d'authentification
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?MaxAuthTries'
+        line: 'MaxAuthTries 3'
+      notify: Redémarrer SSH
+
+    # --- Pare-feu applicatif (UFW) ---
+    - name: Autoriser SSH dans le pare-feu
+      command: ufw allow {{ ssh_port }}/tcp
+      changed_when: true
+
+    - name: Autoriser HTTP dans le pare-feu (application, CCP2)
+      command: ufw allow 80/tcp
+      changed_when: true
+
+    - name: Autoriser l'API k3s dans le pare-feu (administration cluster, CCP2)
+      command: ufw allow 6443/tcp
+      changed_when: true
+
+    - name: Autoriser Grafana dans le pare-feu (supervision, CCP3)
+      command: ufw allow 3000/tcp
+      changed_when: true
+
+    - name: Définir la politique par défaut (refuser tout trafic entrant)
+      command: ufw default deny incoming
+      changed_when: true
+
+    - name: Activer le pare-feu UFW
+      command: ufw --force enable
+      changed_when: true
+
+    # --- Protection contre le brute-force (fail2ban) ---
+    - name: Activer et démarrer fail2ban
+      service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    # --- Mises à jour de sécurité automatiques ---
+    - name: Activer les mises à jour de sécurité automatiques
+      copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+
+    # --- Durcissement noyau / réseau (recommandations ANSSI) ---
+    - name: Appliquer les paramètres réseau durcis (sysctl)
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        state: present
+        reload: true
+      loop:
+        - { name: "net.ipv4.conf.all.accept_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.send_redirects", value: "0" }
+        - { name: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+        - { name: "net.ipv4.tcp_syncookies", value: "1" }
+
+  handlers:
+    - name: Redémarrer SSH
+      service:
+        name: ssh
+        state: restarted

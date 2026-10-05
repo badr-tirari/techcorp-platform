@@ -1,0 +1,30 @@
+# Compétence CCP3 : "Remonter une alerte en cas de dépassement de seuil"
+# Copier ce fichier en alertmanager-configmap.yaml et remplacer les valeurs
+# <SMTP_HOST>, <SMTP_USER>, <SMTP_PASSWORD> (ex: un compte Gmail avec mot de
+# passe d'application, ou tout relai SMTP) avant `kubectl apply`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: '<SMTP_HOST>:587'
+      smtp_from: 'alerting@techcorp-platform.local'
+      smtp_auth_username: '<SMTP_USER>'
+      smtp_auth_password: '<SMTP_PASSWORD>'
+      smtp_require_tls: true
+
+    route:
+      receiver: 'email-admin'
+      group_by: ['alertname']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+
+    receivers:
+      - name: 'email-admin'
+        email_configs:
+          - to: 'tiraribadr@gmail.com'
+            send_resolved: true

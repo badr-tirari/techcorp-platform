@@ -1,0 +1,47 @@
+---
+# bootstrap_k3s.yml
+# ------------------
+# Installe une plateforme Kubernetes légère (k3s) sur le serveur provisionné
+# par Terraform, et en rapatrie le kubeconfig en local pour que :
+#   - CCP2 (CI/CD) puisse y déployer l'application en continu
+#   - CCP3 (supervision) puisse y déployer Prometheus/Grafana/Alertmanager
+# Compétence CCP1 : "Mettre l'infrastructure en production dans le cloud"
+
+- name: Installer et configurer k3s (plateforme de production)
+  hosts: server
+  become: true
+
+  tasks:
+    - name: Installer k3s (server, mode single-node)
+      shell: |
+        curl -sfL https://get.k3s.io | sh -s - \
+          --write-kubeconfig-mode 644
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Attendre que le nœud k3s soit prêt
+      command: k3s kubectl get nodes
+      register: k3s_nodes
+      until: "'Ready' in k3s_nodes.stdout"
+      retries: 15
+      delay: 5
+      changed_when: false
+
+    - name: Récupérer le kubeconfig généré
+      slurp:
+        src: /etc/rancher/k3s/k3s.yaml
+      register: kubeconfig_raw
+
+    - name: Copier le kubeconfig en local (adapté à l'IP publique)
+      delegate_to: localhost
+      become: false
+      copy:
+        content: "{{ (kubeconfig_raw.content | b64decode) | replace('127.0.0.1', ansible_host) }}"
+        dest: "{{ playbook_dir }}/../kubeconfig.yaml"
+        mode: "0600"
+
+    - name: Afficher la commande à utiliser en local
+      delegate_to: localhost
+      become: false
+      debug:
+        msg: "export KUBECONFIG={{ playbook_dir }}/../kubeconfig.yaml puis kubectl get nodes"

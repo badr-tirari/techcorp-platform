@@ -1,0 +1,3 @@
+# Copier ce fichier en terraform.tfvars et adapter les valeurs
+allowed_ssh_cidr = "203.0.113.42/32"   # ta propre IP publique, avec /32
+public_key_path  = "~/.ssh/id_rsa.pub"

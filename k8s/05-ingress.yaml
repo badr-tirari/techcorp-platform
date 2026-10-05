@@ -1,0 +1,18 @@
+# Expose l'application sur le port 80 de l'instance via Traefik (inclus dans k3s).
+# Compétence CCP2/CCP1 : "Mettre l'infrastructure en production"
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: order-tracker
+  namespace: techcorp-orders
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: order-tracker
+                port:
+                  number: 8000

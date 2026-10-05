@@ -1,0 +1,66 @@
+# Compétence CCP2 : "Automatiser la mise en production d'une application avec une plateforme"
+# L'image est reconstruite et republiée automatiquement par la CI/CD
+# (.github/workflows/deploy.yml) à chaque push sur main.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-tracker
+  namespace: techcorp-orders
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: order-tracker
+  template:
+    metadata:
+      labels:
+        app: order-tracker
+    spec:
+      containers:
+        - name: order-tracker
+          image: ghcr.io/OWNER/techcorp-order-tracker:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef: { name: postgres-credentials, key: POSTGRES_DB }
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef: { name: postgres-credentials, key: POSTGRES_USER }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: postgres-credentials, key: POSTGRES_PASSWORD }
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-tracker
+  namespace: techcorp-orders
+spec:
+  selector:
+    app: order-tracker
+  ports:
+    - port: 8000
+      targetPort: 8000
