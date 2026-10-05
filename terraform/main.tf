@@ -85,7 +85,7 @@ data "aws_availability_zones" "available" {
 
 resource "aws_security_group" "main" {
   name        = "${var.project_name}-sg"
-  description = "SSH + API k3s restreints à l'IP admin, HTTP/HTTPS ouverts pour l'application"
+  description = "SSH et API k3s restreints IP admin, HTTP/HTTPS ouverts pour application"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -113,7 +113,7 @@ resource "aws_security_group" "main" {
   }
 
   ingress {
-    description = "HTTPS (réservé, non utilisé par défaut)"
+    description = "HTTPS (reserve, non utilise par defaut)"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -121,7 +121,7 @@ resource "aws_security_group" "main" {
   }
 
   ingress {
-    description = "Grafana (supervision, CCP3) - accès restreint à l'IP admin"
+    description = "Grafana (supervision, CCP3) - acces restreint IP admin"
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
