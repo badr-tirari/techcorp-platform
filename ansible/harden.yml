@@ -10,6 +10,10 @@
   become: true
   vars:
     ssh_port: 22
+    # IP d'administration autorisée (même valeur que allowed_ssh_cidr côté Terraform).
+    # Défense en profondeur : le groupe de sécurité AWS ET le pare-feu UFW
+    # restreignent SSH et l'API k3s à cette seule adresse.
+    admin_cidr: "{{ lookup('env', 'ADMIN_CIDR') | default('88.162.246.126/32', true) }}"
 
   tasks:
     - name: Mettre à jour le cache des paquets
@@ -52,17 +56,28 @@
       notify: Redémarrer SSH
 
     # --- Pare-feu applicatif (UFW) ---
-    - name: Autoriser SSH dans le pare-feu
-      command: ufw allow {{ ssh_port }}/tcp
-      changed_when: true
+    - name: Autoriser SSH dans le pare-feu (IP d'administration uniquement)
+      command: ufw allow from {{ admin_cidr }} to any port {{ ssh_port }} proto tcp
+      register: ufw_ssh
+      changed_when: "'Skipping' not in ufw_ssh.stdout"
 
     - name: Autoriser HTTP dans le pare-feu (application, CCP2)
       command: ufw allow 80/tcp
       changed_when: true
 
-    - name: Autoriser l'API k3s dans le pare-feu (administration cluster, CCP2)
-      command: ufw allow 6443/tcp
-      changed_when: true
+    - name: Autoriser l'API k3s dans le pare-feu (IP d'administration uniquement)
+      command: ufw allow from {{ admin_cidr }} to any port 6443 proto tcp
+      register: ufw_k3s
+      changed_when: "'Skipping' not in ufw_k3s.stdout"
+
+    - name: Supprimer les anciennes ouvertures larges de SSH et de l'API k3s
+      command: ufw delete allow {{ item }}
+      loop:
+        - "{{ ssh_port }}/tcp"
+        - 6443/tcp
+      register: ufw_delete
+      changed_when: "'Rule deleted' in ufw_delete.stdout"
+      failed_when: false
 
     - name: Autoriser Grafana dans le pare-feu (supervision, CCP3)
       command: ufw allow 3000/tcp
