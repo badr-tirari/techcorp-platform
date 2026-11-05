@@ -16,6 +16,9 @@ spec:
           image: grafana/grafana:11.1.0
           ports:
             - containerPort: 3000
+              # Exposé sur le port 3000 de l'hôte : seul port Grafana ouvert
+              # dans le groupe de sécurité AWS (restreint à l'IP admin)
+              hostPort: 3000
           env:
             - name: GF_SECURITY_ADMIN_USER
               value: admin
