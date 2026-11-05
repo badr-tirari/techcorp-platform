@@ -45,7 +45,7 @@ terraform apply    # taper "yes"
 ☐ **Capture 3** : sortie de `terraform apply` terminée (outputs : `public_ip`, `app_url`, `grafana_url`).
 ☐ **Capture 4** (optionnel, alternative script) : sortie de `../scripts/create_server.sh`.
 
-Note coût : `t3.medium` ≈ 0,0416 $/h en eu-west-3. Pense à `terraform destroy` en
+Note coût : `m7i-flex.large` (éligible plan gratuit AWS) en eu-north-1. Pense à `terraform destroy` en
 fin de travail (section 8).
 
 ## 2. Sécuriser le serveur + installer la plateforme (CCP1 — Ansible)

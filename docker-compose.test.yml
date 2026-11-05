@@ -1,5 +1,4 @@
 # Environnement de test local, avant toute mise en production (CCP2).
-version: "3.9"
 services:
   db-test:
     image: postgres:16-alpine

@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
         - name: order-tracker
-          image: ghcr.io/OWNER/techcorp-order-tracker:latest
+          image: ghcr.io/badr-tirari/techcorp-order-tracker:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

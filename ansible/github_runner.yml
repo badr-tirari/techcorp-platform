@@ -1,0 +1,98 @@
+---
+# github_runner.yml
+# ------------------
+# Installe un runner GitHub Actions auto-hébergé sur le serveur k3s.
+# Il exécute le job "deploy" de la CI/CD en local (kubectl sur le cluster),
+# via une connexion SORTANTE vers GitHub : l'API k3s (6443) reste fermée
+# à Internet.
+# Compétence CCP2 : "Automatiser la mise en production d'une application
+# avec une plateforme"
+#
+# Usage (jeton : GitHub > Settings > Actions > Runners > New self-hosted
+# runner ; valable 1 heure) :
+#   ansible-playbook -i inventory.ini github_runner.yml -e runner_token=XXXX
+
+- name: Installer le runner GitHub Actions auto-hébergé
+  hosts: server
+  become: true
+  vars:
+    repo_url: "https://github.com/badr-tirari/techcorp-platform"
+    runner_dir: /opt/actions-runner
+    runner_user: ubuntu
+    runner_labels: techcorp-k3s
+    runner_name: techcorp-k3s
+
+  tasks:
+    - name: Vérifier que le jeton d'enregistrement est fourni
+      assert:
+        that: runner_token is defined and runner_token | length > 0
+        fail_msg: "Passer le jeton avec -e runner_token=XXXX"
+
+    - name: Récupérer la dernière version du runner
+      uri:
+        url: https://api.github.com/repos/actions/runner/releases/latest
+        return_content: true
+      register: runner_release
+
+    - name: Définir la version du runner
+      set_fact:
+        runner_version: "{{ runner_release.json.tag_name | regex_replace('^v', '') }}"
+
+    - name: Créer le dossier du runner
+      file:
+        path: "{{ runner_dir }}"
+        state: directory
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        mode: "0755"
+
+    - name: Télécharger et extraire le runner
+      unarchive:
+        src: "https://github.com/actions/runner/releases/download/v{{ runner_version }}/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
+        dest: "{{ runner_dir }}"
+        remote_src: true
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        creates: "{{ runner_dir }}/config.sh"
+
+    - name: Installer les dépendances du runner
+      command: "{{ runner_dir }}/bin/installdependencies.sh"
+      changed_when: false
+
+    - name: Enregistrer le runner auprès du dépôt GitHub
+      become_user: "{{ runner_user }}"
+      command: >
+        {{ runner_dir }}/config.sh --unattended
+        --url {{ repo_url }}
+        --token {{ runner_token }}
+        --name {{ runner_name }}
+        --labels {{ runner_labels }}
+        --replace
+      args:
+        chdir: "{{ runner_dir }}"
+        creates: "{{ runner_dir }}/.runner"
+      no_log: true
+
+    - name: Installer le runner comme service systemd
+      command: ./svc.sh install {{ runner_user }}
+      args:
+        chdir: "{{ runner_dir }}"
+        creates: "/etc/systemd/system/actions.runner.badr-tirari-techcorp-platform.{{ runner_name }}.service"
+
+    - name: Démarrer le service du runner
+      command: ./svc.sh start
+      args:
+        chdir: "{{ runner_dir }}"
+      changed_when: true
+
+    - name: Vérifier que kubectl accède au cluster depuis le runner
+      become_user: "{{ runner_user }}"
+      command: kubectl get nodes
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: runner_kubectl
+      changed_when: false
+
+    - name: Afficher l'état du cluster vu par le runner
+      debug:
+        var: runner_kubectl.stdout_lines

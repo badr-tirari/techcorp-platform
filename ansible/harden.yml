@@ -68,6 +68,17 @@
       command: ufw allow 3000/tcp
       changed_when: true
 
+    - name: Autoriser HTTPS dans le pare-feu (réservé)
+      command: ufw allow 443/tcp
+      changed_when: true
+
+    - name: Autoriser le trafic interne k3s (réseau des pods et des services)
+      command: ufw allow from {{ item }}
+      loop:
+        - 10.52.0.0/16
+        - 10.53.0.0/16
+      changed_when: true
+
     - name: Définir la politique par défaut (refuser tout trafic entrant)
       command: ufw default deny incoming
       changed_when: true

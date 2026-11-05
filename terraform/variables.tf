@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "Région AWS de déploiement"
   type        = string
-  default     = "eu-west-3"
+  default     = "eu-north-1"
 }
 
 variable "project_name" {
@@ -17,9 +17,9 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "Type d'instance EC2. t3.medium (2 vCPU / 4 Go) recommandé : k3s + Postgres + app + Prometheus + Grafana ne tiennent pas confortablement sur un t3.micro (1 Go)."
+  description = "Type d'instance EC2. m7i-flex.large (2 vCPU / 8 Go, éligible plan gratuit AWS) recommandé : k3s + Postgres + app + Prometheus + Grafana ne tiennent pas confortablement sur un t3.micro (1 Go)."
   type        = string
-  default     = "t3.medium"
+  default     = "m7i-flex.large"
 }
 
 variable "allowed_ssh_cidr" {

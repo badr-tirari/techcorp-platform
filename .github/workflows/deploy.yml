@@ -5,7 +5,8 @@
 # 2) tests automatisés (pytest) contre docker-compose.test.yml
 # 3) publication de l'image sur GitHub Container Registry (GHCR)
 # 4) déploiement continu sur le cluster k3s (rolling update) via kubectl,
-#    en utilisant le kubeconfig récupéré par ansible/bootstrap_k3s.yml
+#    exécuté par un runner GitHub auto-hébergé sur le serveur (aucun port
+#    d'administration exposé à Internet)
 name: CI/CD - TechCorp Order Tracker
 
 on:
@@ -18,7 +19,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/techcorp-order-tracker
+  IMAGE_NAME: ghcr.io/badr-tirari/techcorp-order-tracker
 
 jobs:
   test:
@@ -35,6 +36,11 @@ jobs:
             curl -sf http://localhost:8001/health && break
             sleep 3
           done
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Installer les dépendances de test
         run: pip install pytest requests
@@ -73,14 +79,14 @@ jobs:
 
   deploy:
     needs: build-and-push
-    runs-on: ubuntu-latest
+    # Runner GitHub auto-hébergé installé sur l'EC2 (label "techcorp-k3s") :
+    # il récupère les jobs par une connexion sortante, l'API k3s (6443)
+    # reste fermée à Internet (principe de moindre exposition).
+    runs-on: [self-hosted, techcorp-k3s]
+    env:
+      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configurer kubectl avec le kubeconfig du cluster k3s
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
 
       - name: Appliquer les manifests Kubernetes
         run: kubectl apply -f k8s/ --namespace techcorp-orders
@@ -90,4 +96,4 @@ jobs:
           kubectl set image deployment/order-tracker \
             order-tracker=${{ env.IMAGE_NAME }}:${{ github.sha }} \
             -n techcorp-orders
-          kubectl rollout status deployment/order-tracker -n techcorp-orders
+          kubectl rollout status deployment/order-tracker -n techcorp-orders --timeout=180s

@@ -15,7 +15,10 @@
     - name: Installer k3s (server, mode single-node)
       shell: |
         curl -sfL https://get.k3s.io | sh -s - \
-          --write-kubeconfig-mode 644
+          --write-kubeconfig-mode 644 \
+          --tls-san {{ ansible_host }} \
+          --cluster-cidr 10.52.0.0/16 \
+          --service-cidr 10.53.0.0/16
       args:
         creates: /usr/local/bin/k3s
 
@@ -36,7 +39,7 @@
       delegate_to: localhost
       become: false
       copy:
-        content: "{{ (kubeconfig_raw.content | b64decode) | replace('127.0.0.1', ansible_host) }}"
+        content: "{{ (kubeconfig_raw.content | b64decode) | replace('127.0.0.1', ansible_host) | replace('localhost', ansible_host) }}"
         dest: "{{ playbook_dir }}/../kubeconfig.yaml"
         mode: "0600"
 
