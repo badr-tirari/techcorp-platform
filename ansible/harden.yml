@@ -10,12 +10,18 @@
   become: true
   vars:
     ssh_port: 22
-    # IP d'administration autorisée (même valeur que allowed_ssh_cidr côté Terraform).
+    # IP d'administration autorisée (même valeur que allowed_ssh_cidr côté Terraform),
+    # fournie à l'exécution : export ADMIN_CIDR="x.x.x.x/32" (jamais écrite dans le dépôt).
     # Défense en profondeur : le groupe de sécurité AWS ET le pare-feu UFW
     # restreignent SSH et l'API k3s à cette seule adresse.
-    admin_cidr: "{{ lookup('env', 'ADMIN_CIDR') | default('88.162.246.126/32', true) }}"
+    admin_cidr: "{{ lookup('env', 'ADMIN_CIDR') }}"
 
   tasks:
+    - name: Vérifier que l'IP d'administration est fournie
+      assert:
+        that: admin_cidr | length > 0
+        fail_msg: "Définir l'IP d'administration : export ADMIN_CIDR=\"x.x.x.x/32\""
+
     - name: Mettre à jour le cache des paquets
       apt:
         update_cache: true

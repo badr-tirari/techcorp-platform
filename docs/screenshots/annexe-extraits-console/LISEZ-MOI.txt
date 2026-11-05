@@ -1,0 +1,9 @@
+Annexe - extraits de sorties console
+
+Ces images ne sont PAS des captures d'écran : ce sont des mises en forme,
+mot pour mot, de sorties réelles du terminal (copiées pendant le déploiement
+du 05/11/2026), pour des étapes qui ne peuvent plus être rejouées à l'identique
+(premier déploiement, incidents résolus). A1 est abrégée (détail des attributs
+des ressources réduit). À légender dans le dossier :
+« Extrait de la sortie console (mise en forme) ».
+Toutes les autres images du dossier parent sont de vraies captures d'écran.

@@ -7,8 +7,8 @@
 set -euo pipefail
 
 PROJECT_NAME="techcorp-platform"
-REGION="eu-west-3"
-INSTANCE_TYPE="t3.medium"
+REGION="eu-north-1"
+INSTANCE_TYPE="m7i-flex.large"
 KEY_NAME="${PROJECT_NAME}-key"
 AMI_ID=$(aws ec2 describe-images \
   --owners 099720109477 \

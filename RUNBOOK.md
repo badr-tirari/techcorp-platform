@@ -55,6 +55,7 @@ cd ../ansible
 cp inventory.ini.example inventory.ini
 # éditer inventory.ini : remplacer l'IP par le "public_ip" de terraform output
 
+export ADMIN_CIDR="TON_IP/32"   # même valeur que allowed_ssh_cidr (terraform.tfvars)
 ansible-playbook -i inventory.ini harden.yml
 ansible-playbook -i inventory.ini bootstrap_k3s.yml
 ```
