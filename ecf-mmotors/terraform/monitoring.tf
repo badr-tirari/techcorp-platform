@@ -7,9 +7,45 @@
 # ===========================================================================
 # Canal d'alerte
 # ===========================================================================
+# Clé KMS dédiée : la clé gérée par AWS (alias/aws/sns) n'autorise pas CloudWatch
+# à publier des alarmes dans un topic chiffré.
+data "aws_iam_policy_document" "sns_alerts_key" {
+  statement {
+    sid       = "AccountAdmin"
+    actions   = ["kms:*"]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${local.account_id}:root"]
+    }
+  }
+
+  statement {
+    sid       = "AllowCloudWatchAlarms"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    resources = ["*"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_kms_key" "sns_alerts" {
+  description             = "Chiffrement du topic SNS des alertes M-Motors"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.sns_alerts_key.json
+}
+
+resource "aws_kms_alias" "sns_alerts" {
+  name          = "alias/${local.name}-sns-alerts"
+  target_key_id = aws_kms_key.sns_alerts.key_id
+}
+
 resource "aws_sns_topic" "alerts" {
   name              = "${local.name}-alerts"
-  kms_master_key_id = "alias/aws/sns"
+  kms_master_key_id = aws_kms_key.sns_alerts.arn
 }
 
 resource "aws_sns_topic_subscription" "alerts_email" {

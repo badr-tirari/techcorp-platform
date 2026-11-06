@@ -28,18 +28,22 @@ data "aws_iam_policy_document" "github_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Seule la branche main du dépôt du projet peut déployer
+    # Seuls la branche main et l'environnement GitHub "production" (job deploy)
+    # du dépôt du projet peuvent obtenir des droits sur AWS
     condition {
       test     = "StringEquals"
       variable = "${local.github_oidc_url}:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
+      values = [
+        "repo:${var.github_repo}:ref:refs/heads/main",
+        "repo:${var.github_repo}:environment:production",
+      ]
     }
   }
 }
 
 resource "aws_iam_role" "github_deploy" {
-  name               = "${local.name}-github-deploy"
-  assume_role_policy = data.aws_iam_policy_document.github_assume.json
+  name                 = "${local.name}-github-deploy"
+  assume_role_policy   = data.aws_iam_policy_document.github_assume.json
   max_session_duration = 3600
 }
 
