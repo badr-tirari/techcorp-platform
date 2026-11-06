@@ -1,0 +1,67 @@
+digraph mmotors {
+  graph [rankdir=LR, fontname="DejaVu Sans", fontsize=13, pad=0.4, nodesep=0.35, ranksep=0.7, compound=true, splines=spline,
+         label="M-Motors - Architecture cible \"Move to Cloud\" (AWS eu-west-3)   |   RPO 24 h  -  RTO 3 h", labelloc=t, fontsize=18];
+  node  [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=11, fillcolor="#ffffff", color="#5b6475", penwidth=1.2];
+  edge  [fontname="DejaVu Sans", fontsize=9, color="#5b6475"];
+
+  users  [label="Clients\n(navigateur)", shape=oval, fillcolor="#e8eefc"];
+  staff  [label="Back-office\nM-Motors", shape=oval, fillcolor="#e8eefc"];
+  devs   [label="Développeurs\n/ DevOps", shape=oval, fillcolor="#e8eefc"];
+  github [label="GitHub Actions\nbuild > test > push > deploy\n(OIDC, sans clé AWS)", fillcolor="#f1f1f1"];
+
+  subgraph cluster_edge {
+    label="Services globaux / régionaux AWS"; style="rounded,dashed"; color="#9aa3b5"; fontsize=12;
+    cf_front [label="CloudFront #1\nsite client\nHTTPS, en-têtes sécurité", fillcolor="#f3e8fd"];
+    cf_api   [label="CloudFront #2\nAPI\nHTTPS", fillcolor="#f3e8fd"];
+    cognito  [label="Amazon Cognito\nUser Pool\n(groupes clients / backoffice, MFA)", fillcolor="#fde8e8"];
+    s3_front [label="S3 « front-end »\nsite statique HTML/JS\naccès via CloudFront (OAC)", fillcolor="#e7f6e7"];
+    ecr      [label="Amazon ECR\nimages API\n(scan à chaque push)", fillcolor="#fff4e0"];
+    cw       [label="CloudWatch\nlogs, métriques, alarmes,\ntableau de bord", fillcolor="#e0f2f5"];
+    sns      [label="SNS -> e-mail\n+ AWS Budgets (FinOps)", fillcolor="#e0f2f5"];
+    sched    [label="EventBridge Scheduler\nstop 20h / start 8h\nlun-ven (Europe/Paris)", fillcolor="#e0f2f5"];
+  }
+
+  subgraph cluster_vpc {
+    label="VPC 10.50.0.0/16  -  2 zones de disponibilité"; style="rounded"; color="#3b6fd8"; penwidth=1.6; fontsize=12;
+
+    subgraph cluster_pub {
+      label="Sous-réseaux publics"; style="rounded,filled"; fillcolor="#eef8ee"; color="#7cb87c";
+      alb [label="Application Load Balancer\n:80 depuis CloudFront uniquement", fillcolor="#ffffff"];
+      nat [label="NAT Gateway", fillcolor="#ffffff"];
+    }
+
+    subgraph cluster_app {
+      label="Sous-réseaux privés - application"; style="rounded,filled"; fillcolor="#eef3fc"; color="#7c9ad8";
+      ecs [label="Amazon ECS Fargate\nAPI Python FastAPI\n2 à 4 tâches (auto-scaling)\nrolling update + rollback", fillcolor="#ffffff"];
+      dev [label="VM de dev EC2\nSpot, IMDSv2, sans SSH\n(accès SSM)", fillcolor="#ffffff"];
+      vpce [label="Endpoint VPC S3", shape=box, fillcolor="#ffffff"];
+    }
+
+    subgraph cluster_data {
+      label="Sous-réseaux privés - données (sans Internet)"; style="rounded,filled"; fillcolor="#fdf3e7"; color="#d8a85c";
+      rds [label="Amazon RDS PostgreSQL 16\nDaaS, chiffré, TLS forcé\nsauvegardes quotidiennes + PITR\n(option Multi-AZ)\nmot de passe : Secrets Manager", fillcolor="#ffffff"];
+    }
+  }
+
+  s3_docs [label="S3 privé « dossiers clients »\nachat / location\nchiffré KMS, versioning, cycle de vie", fillcolor="#e7f6e7"];
+
+  users -> cf_front [label="HTTPS"];
+  users -> cf_api   [label="HTTPS"];
+  staff -> cf_api;
+  users -> cognito  [label="connexion", style=dashed];
+  cf_front -> s3_front [label="OAC"];
+  cf_api -> alb [label="HTTP (prefix list)"];
+  alb -> ecs [label=":8000"];
+  ecs -> rds [label=":5432 TLS"];
+  ecs -> vpce [label="lecture seule\n(rôle IAM de la tâche)"];
+  vpce -> s3_docs;
+  dev -> rds [label="migration\ndes données", style=dashed];
+  devs -> dev [label="SSM Session Manager", style=dashed];
+  devs -> github [label="git push"];
+  github -> ecr [label="push image"];
+  github -> ecs [label="nouvelle révision"];
+  ecr -> ecs [label="pull", style=dashed, constraint=false];
+  sched -> dev [label="start/stop", style=dashed, constraint=false];
+  ecs -> cw [label="logs + métriques\n(ECS, ALB, RDS)", style=dashed, constraint=false];
+  cw -> sns [label="alarmes"];
+}

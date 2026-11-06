@@ -1,0 +1,45 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListDossiersPrefix",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::mmotors-prod-dossiers-clients-<ACCOUNT_ID>",
+      "Condition": {
+        "StringLike": { "s3:prefix": "dossiers/*" }
+      }
+    },
+    {
+      "Sid": "ReadDossierDocuments",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:GetObjectTagging"
+      ],
+      "Resource": "arn:aws:s3:::mmotors-prod-dossiers-clients-<ACCOUNT_ID>/dossiers/*"
+    },
+    {
+      "Sid": "DecryptWithDocumentsKey",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "arn:aws:kms:eu-west-3:<ACCOUNT_ID>:key/<KMS_KEY_ID>",
+      "Condition": {
+        "StringEquals": { "kms:ViaService": "s3.eu-west-3.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "DenyOutsideVpcEndpoint",
+      "Effect": "Deny",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::mmotors-prod-dossiers-clients-<ACCOUNT_ID>",
+        "arn:aws:s3:::mmotors-prod-dossiers-clients-<ACCOUNT_ID>/*"
+      ],
+      "Condition": {
+        "StringNotEquals": { "aws:SourceVpce": "<VPC_ENDPOINT_S3_ID>" }
+      }
+    }
+  ]
+}

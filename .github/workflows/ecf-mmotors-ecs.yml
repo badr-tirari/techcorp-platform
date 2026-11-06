@@ -1,0 +1,142 @@
+# ECF Final M-Motors — Activité Type 2, question 4
+# Pipeline build / test / deploy de l'API FastAPI vers Amazon ECS (Fargate)
+#
+#   test ──► build-push (ECR, tag = SHA du commit) ──► deploy (nouvelle révision
+#   de tâche + rolling update ECS, attente de la stabilité du service)
+#
+# Authentification AWS par OIDC (aucune clé AWS stockée dans GitHub).
+# Prérequis : variable de dépôt AWS_ROLE_ARN = output "github_actions_role_arn".
+name: ECF M-Motors - CI/CD ECS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ecf-mmotors/app/**"
+      - "ecf-mmotors/tests/**"
+      - ".github/workflows/ecf-mmotors-ecs.yml"
+  pull_request:
+    paths:
+      - "ecf-mmotors/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-3
+  ECR_REPOSITORY: mmotors-prod-api
+  ECS_CLUSTER: mmotors-prod-cluster
+  ECS_SERVICE: mmotors-prod-api
+  TASK_FAMILY: mmotors-prod-api
+  CONTAINER_NAME: api
+
+concurrency:
+  group: ecf-mmotors-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Tests unitaires
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ecf-mmotors
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ecf-mmotors/requirements-dev.txt
+
+      - name: Installer les dépendances
+        run: pip install -r requirements-dev.txt
+
+      - name: Lancer pytest
+        run: pytest -v --junitxml=report.xml
+
+      - name: Publier le rapport de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-pytest
+          path: ecf-mmotors/report.xml
+
+  build-push:
+    name: Build et push vers ECR
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authentification AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Connexion à Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build de l'image
+        id: meta
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}"
+          docker build -t "$IMAGE" -t "$REGISTRY/$ECR_REPOSITORY:latest" ecf-mmotors/app
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Test de fumée du conteneur
+        run: |
+          docker run -d --name smoke -p 8000:8000 "${{ steps.meta.outputs.image }}"
+          for i in $(seq 1 15); do curl -sf http://localhost:8000/health && break; sleep 2; done
+          curl -sf http://localhost:8000/ | grep -q "Hello World"
+          docker rm -f smoke
+
+      - name: Push vers ECR
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          docker push "${{ steps.meta.outputs.image }}"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+
+  deploy:
+    name: Déploiement ECS
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Authentification AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Récupérer la définition de tâche courante
+        run: |
+          aws ecs describe-task-definition --task-definition "$TASK_FAMILY" \
+            --query taskDefinition > task-definition.json
+
+      - name: Injecter la nouvelle image
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ needs.build-push.outputs.image }}
+
+      - name: Déployer sur ECS (rolling update)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ env.ECS_SERVICE }}
+          wait-for-service-stability: true

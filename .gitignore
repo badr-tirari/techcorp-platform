@@ -20,3 +20,8 @@ __pycache__/
 monitoring/grafana/grafana-secret.yaml
 terraform/.terraform/
 _to_delete/
+
+# ECF M-Motors
+ecf-mmotors/terraform/terraform.tfvars
+ecf-mmotors/report.xml
+tfplan

@@ -1,0 +1,8 @@
+# Copier en terraform.tfvars (fichier exclu de Git) puis adapter.
+aws_region         = "eu-west-3"
+alert_email        = "votre.adresse@example.com"
+github_repo        = "badr-tirari/techcorp-platform"
+monthly_budget_usd = 150
+
+# Si le fournisseur OIDC GitHub existe déjà dans le compte AWS :
+# create_github_oidc_provider = false
